@@ -1,1080 +1,356 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Chart, RadarController, RadialLinearScale, PointElement, LineElement, Filler, Tooltip } from "chart.js";
+
 Chart.register(RadarController, RadialLinearScale, PointElement, LineElement, Filler, Tooltip);
 
-const BACKEND_URL = "YOUR_APPS_SCRIPT_URL_HERE";
+const DIM_COLORS = ["#378ADD", "#1D9E75", "#BA7517", "#D85A30", "#7F77DD"];
+const DIM_NAMES = ["Accesibilidad", "Transformación", "Alineación", "Viabilidad", "Estratégico"];
 
-// ── ETB BRAND COLOR SYSTEM ────────────────────────────────────────────────────
-const C = {
-  // ETB Brand colors
-  cyan:    "#35C0ED",   // Primary accent — ETB brand
-  teal:    "#2F90B0",   // Secondary accent — ETB brand
-  mint:    "#9AEBA6",   // Tertiary — ETB brand (used for positive/adopt)
-  black:   "#000000",   // Structural — ETB brand
-  // UI adaptations
-  ink:     "#0D0D0D",   // Near-black — avoids visual fatigue
-  paper:   "#F5F5F5",   // Background — ETB brand exact
-  card:    "#FFFFFF",
-  border:  "#E0E0E0",
-  muted:   "#6B6460",
-  // Semantic — universal (warning/danger), not ETB brand colors
-  amber:   "#b45309",
-  rose:    "#be123c",
-  // Verdict colors
-  adoptText: "#1a5c3a", adoptBg: "#e8faf0",
-  planText:  "#2F90B0", planBg:  "#edf7fc",
-  condText:  "#b45309", condBg:  "#fffbeb",
-  rejText:   "#be123c", rejBg:   "#fef2f2",
-  // Light tints for dim cards
-  cyanL:  "#edf7fc",
-  tealL:  "#e6f3f8",
-  mintL:  "#edfaf1",
-  amberL: "#fffbeb",
-  purpleL:"#f5f3ff",
-  roseL:  "#fef2f2",
-};
+const DIMENSIONS = [
+  {
+    id: 1, emoji: "🌐", color: "#E6F1FB", textColor: "#185FA5",
+    label: "Accesibilidad y contexto",
+    meta: "FODA · ISTE · Viabilidad real en tu escuela",
+    questions: [
+      { id: "q1a", marco: "FODA · Acceso", text: "¿La herramienta es gratuita o accesible sin costo para mi escuela?", left: "No aplica", right: "Totalmente" },
+      { id: "q1b", marco: "FODA · Infraestructura", text: "¿Funciona bien con la conectividad y los dispositivos disponibles en mi salón?", left: "No aplica", right: "Perfectamente" },
+      { id: "q1c", marco: "ISTE · Equidad", text: "¿Todos mis estudiantes pueden acceder sin barreras de idioma, dispositivo o conectividad?", left: "Ninguno", right: "Todos" },
+    ]
+  },
+  {
+    id: 2, emoji: "🔁", color: "#EAF3DE", textColor: "#3B6D11",
+    label: "Nivel de transformación",
+    meta: "SAMR · RAT · ¿Qué cambia en la práctica pedagógica?",
+    questions: [
+      { id: "q2a", marco: "SAMR", text: "¿La herramienta va más allá de sustituir lo que ya hacía en papel o digitalmente?", left: "Sustituye", right: "Redefine" },
+      { id: "q2b", marco: "RAT · Amplificación", text: "¿Amplifica lo que ya hago bien, haciendo procesos más eficientes o de mayor impacto?", left: "No", right: "Claramente" },
+      { id: "q2c", marco: "SAMR · Redefinición", text: "¿Permite hacer cosas imposibles sin tecnología — colaboración, diferenciación, IA?", left: "No", right: "Sí, claramente" },
+    ]
+  },
+  {
+    id: 3, emoji: "🎯", color: "#FAEEDA", textColor: "#854F0B",
+    label: "Alineación pedagógica",
+    meta: "TPACK · Triple E · Aprendizaje genuino",
+    questions: [
+      { id: "q3a", marco: "TPACK", text: "¿Tengo (o puedo desarrollar) el conocimiento tecnológico-pedagógico para usarla bien en mi materia?", left: "No aún", right: "Sí, domino" },
+      { id: "q3b", marco: "Triple E · Engagement", text: "¿Aumenta el compromiso genuino de los estudiantes con el aprendizaje?", left: "Poco", right: "Mucho" },
+      { id: "q3c", marco: "Triple E · Enhancement", text: "¿Apoya diferenciación, retroalimentación formativa o personalización del aprendizaje?", left: "No", right: "Excelente" },
+    ]
+  },
+  {
+    id: 4, emoji: "⚙️", color: "#FAECE7", textColor: "#993C1D",
+    label: "Viabilidad de implementación",
+    meta: "FODA · ¿Puedo implementarla ahora mismo?",
+    questions: [
+      { id: "q4a", marco: "FODA · Fortaleza interna", text: "¿La curva de aprendizaje es manejable — puedo dominarla en menos de una semana?", left: "Muy difícil", right: "Muy fácil" },
+      { id: "q4b", marco: "FODA · Amenaza", text: "¿El tiempo de configuración inicial es razonable para implementarla esta semana?", left: "No, mucho", right: "Sí, mínimo" },
+      { id: "q4c", marco: "FODA · Soporte", text: "¿Tiene soporte, tutoriales o comunidad de docentes que pueda consultar?", left: "Ninguno", right: "Muy robusto" },
+    ]
+  },
+  {
+    id: 5, emoji: "🚀", color: "#EEEDFE", textColor: "#3C3489",
+    label: "Potencial estratégico",
+    meta: "ISTE · FODA · Valor a largo plazo",
+    questions: [
+      { id: "q5a", marco: "ISTE · Integración", text: "¿Se integra bien con los sistemas que ya uso — Teams, M365, Google?", left: "Ninguna", right: "Perfecta" },
+      { id: "q5b", marco: "FODA · Oportunidad", text: "¿Tiene potencial para escalar — más materias, más grados, compartir con colegas?", left: "Solo yo", right: "Alta escala" },
+      { id: "q5c", marco: "ISTE · Sostenibilidad", text: "¿Esta herramienta seguirá siendo relevante y accesible en los próximos 2 años?", left: "No creo", right: "Con seguridad" },
+    ]
+  }
+];
 
-// Dim card accent colors — all from ETB palette where possible
-const DIM_ACCENT = {
-  acceso:     { color: C.cyan,  light: C.cyanL  },
-  viabilidad: { color: C.teal,  light: C.tealL  },
-  etica:      { color: "#2F90B0", light: "#e6f3f8" },
-  picrat:     { color: C.cyan,  light: C.cyanL  },
-  triple:     { color: "#1a5c3a", light: C.mintL },
-  prod:       { color: C.teal,  light: C.tealL  },
-  inst:       { color: "#5b21b6", light: C.purpleL },
-  ai:         { color: C.rose,  light: C.roseL  },
-};
+const ALL_QUESTIONS = DIMENSIONS.flatMap(d => d.questions.map(q => q.id));
 
-// ── PDF COLORS ────────────────────────────────────────────────────────────────
-const PDF_C = {
-  black:  [0, 0, 0],
-  ink:    [13, 13, 13],
-  white:  [255, 255, 255],
-  paper:  [245, 245, 245],
-  cyan:   [53, 192, 237],
-  teal:   [47, 144, 176],
-  mint:   [154, 235, 166],
-  mintDark: [26, 92, 58],
-  amber:  [180, 83, 9],
-  rose:   [190, 18, 60],
-  border: [224, 224, 224],
-  muted:  [107, 100, 96],
-  lgray:  [248, 248, 248],
-};
-
-function verdictPdfColors(key) {
+function getVerdict(pct) {
+  if (pct >= 0.80) return {
+    icon: "✅", short: "Adoptar ahora", bg: "#EAF3DE", titleColor: "#3B6D11",
+    title: "Herramienta altamente recomendada para adopción",
+    text: "Esta herramienta muestra un perfil sólido en todas las dimensiones. Es accesible, pedagógicamente alineada y viable en tu contexto. Prioriza su implementación esta semana y comparte el aprendizaje con tus colegas."
+  };
+  if (pct >= 0.60) return {
+    icon: "⚡", short: "Adoptar con plan", bg: "#FAEEDA", titleColor: "#854F0B",
+    title: "Herramienta prometedora — requiere un plan de adopción",
+    text: "La herramienta tiene potencial real pero presenta algunas áreas de atención. Revisa las dimensiones con puntuación más baja y diseña un plan de implementación gradual. Considera pilotearla en una clase o unidad específica primero."
+  };
+  if (pct >= 0.40) return {
+    icon: "⚠️", short: "Evaluar más", bg: "#FAECE7", titleColor: "#993C1D",
+    title: "Adopción condicional — revisar contexto y barreras",
+    text: "Esta herramienta tiene valor en algunos aspectos pero presenta barreras significativas en tu contexto actual. Identifica las 1-2 dimensiones más débiles y evalúa si pueden resolverse antes de invertir tiempo en aprenderla."
+  };
   return {
-    adopt:       { text: PDF_C.mintDark, bg: [232, 250, 240] },
-    plan:        { text: PDF_C.teal,     bg: [237, 247, 252] },
-    conditional: { text: PDF_C.amber,   bg: [255, 251, 235] },
-    reject:      { text: PDF_C.rose,    bg: [254, 242, 242] },
-  }[key];
+    icon: "⛔", short: "No es el momento", bg: "#FCEBEB", titleColor: "#A32D2D",
+    title: "Herramienta no recomendada para este contexto ahora",
+    text: "En este momento, esta herramienta presenta demasiadas barreras para tu contexto específico. Esto no significa que sea mala — puede que el momento, la infraestructura o el dominio pedagógico no estén alineados aún."
+  };
 }
 
-// ── FRAMEWORK BADGE COLORS — tuned to ETB palette ────────────────────────────
-const FW_COLORS = {
-  "PIC-RAT":      { bg: C.cyanL,   c: "#1a7fa8" },
-  "Triple E":     { bg: C.mintL,   c: "#1a5c3a" },
-  "FODA":         { bg: "#fffbeb", c: C.amber   },
-  "ISTE":         { bg: "#f5f3ff", c: "#5b21b6" },
-  "TIM":          { bg: C.tealL,   c: C.teal    },
-  "UNESCO AI":    { bg: C.roseL,   c: C.rose    },
-  "Common Sense": { bg: "#fff7ed", c: "#c2410c" },
-  "TPACK":        { bg: "#fdf4ff", c: "#7e22ce" },
-};
+function RadarChart({ data, label }) {
+  const canvasRef = useRef(null);
+  const chartRef = useRef(null);
 
-const Badge = ({ fw }) => {
-  const s = FW_COLORS[fw] || { bg: "#f3f4f6", c: "#374151" };
-  return (
-    <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 10,
-      background: s.bg, color: s.c, letterSpacing: "0.05em", whiteSpace: "nowrap",
-      fontFamily: "'Questrial', sans-serif" }}>
-      {fw}
-    </span>
-  );
-};
-
-// ── PDF: FULL REPORT ──────────────────────────────────────────────────────────
-async function generateReportPDF(data, lang) {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const W = 210, H = 297, ml = 18, mr = 18, cw = W - ml - mr;
-  let y = 0;
-
-  const tx = lang === "es" ? {
-    title: "Reporte de Evaluación",
-    subtitle: "Instrumento para la Integración Crítica de Tecnología",
-    evaluator: "Evaluador/a", role: "Rol", date: "Fecha",
-    tool: "Herramienta evaluada", score: "Puntuación", of: "de",
-    recommendation: "Recomendación", profile: "Perfil por dimensión",
-    actions: "Recomendaciones de implementación",
-    frameworks: "Marcos teóricos aplicados",
-    cite: "Cómo citar (APA 7)",
-    footer: "Documento generado por ICRIT v2.0",
-    weak: "Dimensiones a fortalecer:",
-  } : {
-    title: "Evaluation Report",
-    subtitle: "Instrument for the Critical Integration of Technology",
-    evaluator: "Evaluator", role: "Role", date: "Date",
-    tool: "Evaluated tool", score: "Total score", of: "of",
-    recommendation: "Recommendation", profile: "Profile by dimension",
-    actions: "Implementation recommendations",
-    frameworks: "Applied theoretical frameworks",
-    cite: "How to cite (APA 7)",
-    footer: "Document generated by ICRIT v2.0",
-    weak: "Priority dimensions to strengthen:",
-  };
-
-  const addPage = () => { doc.addPage(); y = 20; };
-  const checkBreak = (n = 20) => { if (y + n > H - 18) addPage(); };
-
-  // ── HEADER ──
-  doc.setFillColor(...PDF_C.black);
-  doc.rect(0, 0, W, 50, "F");
-  // Cyan accent bar top
-  doc.setFillColor(...PDF_C.cyan);
-  doc.rect(0, 0, W, 4, "F");
-  // Cyan left rule
-  doc.rect(ml, 12, 3, 30, "F");
-
-  doc.setTextColor(...PDF_C.white);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(26);
-  doc.text("ICRIT", ml + 8, 27);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(10);
-  doc.setTextColor(...PDF_C.cyan);
-  doc.text(tx.subtitle, ml + 8, 35);
-  doc.setFontSize(7.5); doc.setTextColor(180, 180, 180);
-  doc.text(`${tx.title.toUpperCase()}  ·  EdTech Believers LLC  ·  etb.education`, ml + 8, 43);
-
-  // Date top right
-  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...PDF_C.cyan);
-  const dateStr = new Date().toLocaleDateString(lang === "es" ? "es-PR" : "en-US", { year: "numeric", month: "long", day: "numeric" });
-  doc.text(dateStr, W - mr, 43, { align: "right" });
-
-  y = 60;
-
-  // ── INFO CARDS ──
-  const half = cw / 2 - 3;
-  // Tool card
-  doc.setFillColor(...PDF_C.lgray);
-  doc.roundedRect(ml, y, half, 32, 3, 3, "F");
-  doc.setDrawColor(...PDF_C.cyan); doc.setLineWidth(0.5);
-  doc.line(ml, y, ml + half, y);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(...PDF_C.muted);
-  doc.text(tx.tool.toUpperCase(), ml + 5, y + 8);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(...PDF_C.ink);
-  const toolLines = doc.splitTextToSize(data.toolName || "—", half - 10);
-  doc.text(toolLines[0], ml + 5, y + 17);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...PDF_C.muted);
-  doc.text((data.toolTypeLabel || "") + "  ·  " + (data.aiLevelLabel || ""), ml + 5, y + 25);
-
-  // Evaluator card
-  const rx = ml + half + 6;
-  doc.setFillColor(...PDF_C.lgray);
-  doc.roundedRect(rx, y, half, 32, 3, 3, "F");
-  doc.setDrawColor(...PDF_C.cyan); doc.setLineWidth(0.5);
-  doc.line(rx, y, rx + half, y);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(...PDF_C.muted);
-  doc.text(tx.evaluator.toUpperCase(), rx + 5, y + 8);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(...PDF_C.ink);
-  doc.text(data.evaluatorName || "—", rx + 5, y + 17);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...PDF_C.muted);
-  doc.text((data.role || "") + (data.level ? "  ·  " + data.level : ""), rx + 5, y + 25);
-
-  y += 40;
-
-  // ── SCORE + VERDICT ──
-  const vdc = verdictPdfColors(data.verdictKey);
-  doc.setFillColor(...vdc.bg);
-  doc.roundedRect(ml, y, cw, 30, 3, 3, "F");
-  // Left: score
-  doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(...PDF_C.muted);
-  doc.text(tx.score.toUpperCase(), ml + 5, y + 8);
-  doc.setFontSize(28); doc.setTextColor(...vdc.text);
-  doc.text(String(data.totalScore), ml + 5, y + 22);
-  doc.setFontSize(10); doc.setTextColor(...PDF_C.muted);
-  doc.text(`${tx.of} ${data.totalMax}  ·  ${Math.round((data.totalScore/data.totalMax)*100)}%`, ml + 5 + doc.getTextWidth(String(data.totalScore)) + 2, y + 22);
-  // Divider
-  doc.setDrawColor(...PDF_C.border); doc.setLineWidth(0.4);
-  doc.line(ml + 52, y + 5, ml + 52, y + 25);
-  // Right: verdict
-  doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(...PDF_C.muted);
-  doc.text(tx.recommendation.toUpperCase(), ml + 57, y + 8);
-  doc.setFontSize(12); doc.setTextColor(...vdc.text);
-  doc.text(data.verdictLabel || "—", ml + 57, y + 17);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...PDF_C.muted);
-  const vbLines = doc.splitTextToSize(data.verdictBody || "", cw - 60);
-  doc.text(vbLines.slice(0, 2), ml + 57, y + 24);
-
-  y += 38;
-
-  // ── DIM BARS ──
-  checkBreak(12);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(...PDF_C.muted);
-  doc.text(tx.profile.toUpperCase(), ml, y); y += 7;
-
-  const barColors = [PDF_C.cyan, PDF_C.teal, [47,144,176], [26,92,58], PDF_C.rose, [91,33,182]];
-  (data.dims || []).forEach((dim, i) => {
-    checkBreak(9);
-    const pct = dim.max > 0 ? dim.score / dim.max : 0;
-    const bc = barColors[i % barColors.length];
-    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...PDF_C.ink);
-    doc.text(dim.label.split(/\s+/).slice(0, 4).join(" "), ml, y + 4);
-    doc.setFillColor(...PDF_C.border);
-    doc.roundedRect(ml + 55, y, cw - 58, 5, 1, 1, "F");
-    if (pct > 0) { doc.setFillColor(...bc); doc.roundedRect(ml + 55, y, (cw - 58) * pct, 5, 1, 1, "F"); }
-    doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(...PDF_C.muted);
-    doc.text(`${dim.score}/${dim.max}`, W - mr - 1, y + 4, { align: "right" });
-    y += 9;
-  });
-
-  y += 4;
-
-  // ── WEAK DIMS ──
-  if (data.weakDims && data.weakDims.length > 0) {
-    checkBreak(12);
-    doc.setFillColor(254, 242, 242);
-    doc.roundedRect(ml, y, cw, 10, 2, 2, "F");
-    doc.setFillColor(...PDF_C.rose); doc.roundedRect(ml, y, 3, 10, 1, 1, "F");
-    doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(...PDF_C.rose);
-    doc.text(tx.weak + " " + data.weakDims.join(", "), ml + 6, y + 6.5);
-    y += 16;
-  }
-
-  // ── ACTIONS ──
-  checkBreak(16);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(...PDF_C.muted);
-  doc.text(tx.actions.toUpperCase(), ml, y); y += 7;
-
-  (data.actions || []).forEach((a) => {
-    checkBreak(14);
-    const lines = doc.splitTextToSize(a, cw - 10);
-    const bh = lines.length * 5 + 7;
-    doc.setFillColor(...PDF_C.lgray); doc.roundedRect(ml, y, cw, bh, 2, 2, "F");
-    doc.setFillColor(...PDF_C.cyan); doc.roundedRect(ml, y, 3, bh, 1, 1, "F");
-    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...PDF_C.ink);
-    doc.text(lines, ml + 7, y + 5.5);
-    y += bh + 3;
-  });
-  y += 4;
-
-  // ── FRAMEWORKS ──
-  checkBreak(18);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(...PDF_C.muted);
-  doc.text(tx.frameworks.toUpperCase(), ml, y); y += 6;
-  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...PDF_C.ink);
-  const fwL = doc.splitTextToSize((data.frameworks || []).join("  ·  "), cw);
-  doc.text(fwL, ml, y); y += fwL.length * 5 + 6;
-
-  // ── CITE ──
-  checkBreak(18);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(...PDF_C.muted);
-  doc.text(tx.cite.toUpperCase(), ml, y); y += 6;
-  doc.setFillColor(...PDF_C.lgray);
-  const citeL = doc.splitTextToSize(data.citeText || "", cw - 8);
-  doc.roundedRect(ml, y, cw, citeL.length * 5 + 8, 2, 2, "F");
-  doc.setFont("helvetica", "italic"); doc.setFontSize(8); doc.setTextColor(...PDF_C.ink);
-  doc.text(citeL, ml + 4, y + 6);
-
-  // ── FOOTER ──
-  const tp = doc.internal.getNumberOfPages();
-  for (let p = 1; p <= tp; p++) {
-    doc.setPage(p);
-    doc.setFillColor(...PDF_C.black); doc.rect(0, H - 11, W, 11, "F");
-    doc.setFillColor(...PDF_C.cyan); doc.rect(0, H - 11, W, 1.5, "F");
-    doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(160, 160, 160);
-    doc.text("ICRIT v2.0  ·  EdTech Believers LLC", ml, H - 4.5);
-    doc.setTextColor(...PDF_C.cyan);
-    doc.text("etb.education", W / 2, H - 4.5, { align: "center" });
-    doc.setTextColor(160, 160, 160);
-    doc.text(`${p} / ${tp}`, W - mr, H - 4.5, { align: "right" });
-  }
-
-  const safe = (data.toolName || "tool").replace(/[^a-zA-Z0-9]/g, "_");
-  doc.save(`ICRIT_Reporte_${safe}.pdf`);
-}
-
-// ── PDF: CERTIFICATE ──────────────────────────────────────────────────────────
-async function generateCertificatePDF(data, lang) {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-  const W = 297, H = 210;
-  const ml = 20;
-
-  const tx = lang === "es" ? {
-    certifies: "Este documento certifica que",
-    completed: "completó una evaluación crítica de la herramienta",
-    using: "utilizando el Instrumento para la Integración Crítica de Tecnología",
-    date: "Fecha", web: "etb.education",
-    tagline: "Evaluación crítica · Integración responsable · Liderazgo edtech",
-    issuedBy: "Emitido por",
-  } : {
-    certifies: "This document certifies that",
-    completed: "completed a critical evaluation of the tool",
-    using: "using the Instrument for the Critical Integration of Technology",
-    date: "Date", web: "etb.education",
-    tagline: "Critical evaluation · Responsible integration · EdTech leadership",
-    issuedBy: "Issued by",
-  };
-
-  const vdc = verdictPdfColors(data.verdictKey);
-  const pctStr = Math.round((data.totalScore / data.totalMax) * 100) + "%";
-
-  // ── BACKGROUND ──
-  doc.setFillColor(...PDF_C.paper); doc.rect(0, 0, W, H, "F");
-
-  // ── LEFT PANEL — black ──
-  doc.setFillColor(...PDF_C.black); doc.rect(0, 0, 78, H, "F");
-  // Cyan top bar on left panel
-  doc.setFillColor(...PDF_C.cyan); doc.rect(0, 0, 78, 5, "F");
-  // Decorative circle
-  doc.setFillColor(20, 20, 20); doc.circle(39, H - 30, 45, "F");
-  doc.setFillColor(10, 10, 10); doc.circle(39, H - 30, 32, "F");
-
-  // ICRIT wordmark on dark panel
-  doc.setFont("helvetica", "bold"); doc.setFontSize(34); doc.setTextColor(...PDF_C.cyan);
-  doc.text("ICRIT", 10, 38);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(180, 180, 180);
-  doc.text(lang === "es" ? "Instrumento para la" : "Instrument for the", 10, 46);
-  doc.text(lang === "es" ? "Integración Crítica de" : "Critical Integration of", 10, 52);
-  doc.text(lang === "es" ? "Tecnología" : "Technology", 10, 58);
-
-  // Score circle
-  const cx = 39, cy = 110, cr = 24;
-  doc.setFillColor(...PDF_C.cyan); doc.circle(cx, cy, cr, "F");
-  doc.setFillColor(...PDF_C.black); doc.circle(cx, cy, cr - 2.5, "F");
-  doc.setFont("helvetica", "bold"); doc.setFontSize(20); doc.setTextColor(...PDF_C.cyan);
-  doc.text(pctStr, cx, cy + 5, { align: "center" });
-  doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(160, 160, 160);
-  doc.text(`${data.totalScore} / ${data.totalMax}`, cx, cy + 13, { align: "center" });
-
-  // Verdict pill
-  doc.setFillColor(...vdc.bg[0], ...vdc.bg.slice ? [] : []);
-  // Simple rounded rect for verdict
-  doc.setFillColor(30, 30, 30);
-  doc.roundedRect(cx - 20, cy + 17, 40, 9, 2, 2, "F");
-  doc.setFillColor(...PDF_C.cyan);
-  doc.roundedRect(cx - 19, cy + 17, 38, 7.5, 1.5, 1.5, "F");
-  doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(...PDF_C.black);
-  doc.text(data.verdictLabel || "", cx, cy + 23, { align: "center" });
-
-  // ETB branding at bottom of left panel
-  doc.setFillColor(...PDF_C.cyan);
-  doc.roundedRect(8, H - 22, 62, 11, 2, 2, "F");
-  doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setTextColor(...PDF_C.black);
-  doc.text("EdTech Believers LLC", 39, H - 15, { align: "center" });
-
-  // ── RIGHT PANEL ──
-  const rx = 90;
-  const rw = W - rx - 14;
-
-  // Top cyan rule
-  doc.setFillColor(...PDF_C.cyan); doc.rect(rx, 14, rw, 2, "F");
-
-  // Certifies
-  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(...PDF_C.muted);
-  doc.text(tx.certifies, rx, 30);
-
-  // Name — large
-  doc.setFont("helvetica", "bold"); doc.setFontSize(24); doc.setTextColor(...PDF_C.ink);
-  const nameL = doc.splitTextToSize(data.evaluatorName || "—", rw);
-  doc.text(nameL[0], rx, 44);
-
-  // Role & level
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...PDF_C.muted);
-  doc.text((data.role || "") + (data.level ? "  ·  " + data.level : ""), rx, 53);
-
-  // Completed text
-  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(...PDF_C.ink);
-  doc.text(tx.completed, rx, 66);
-
-  // Tool name — cyan
-  doc.setFont("helvetica", "bold"); doc.setFontSize(20); doc.setTextColor(...PDF_C.cyan);
-  const toolL = doc.splitTextToSize(data.toolName || "—", rw);
-  doc.text(toolL[0], rx, 80);
-
-  // Tool type + AI
-  doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(...PDF_C.muted);
-  doc.text((data.toolTypeLabel || "") + "  ·  " + (data.aiLevelLabel || ""), rx, 89);
-
-  // Using ICRIT
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...PDF_C.muted);
-  doc.text(tx.using + " (ICRIT v2.0)", rx, 100);
-
-  // Mini dim bars
-  const dimsToShow = (data.dims || []).slice(0, 6);
-  const colW = rw / Math.max(dimsToShow.length, 1);
-  const barY = 110;
-  const barColors = [PDF_C.cyan, PDF_C.teal, PDF_C.cyan, [26,92,58], PDF_C.rose, [91,33,182]];
-  dimsToShow.forEach((dim, i) => {
-    const bx = rx + i * colW;
-    const bpct = dim.max > 0 ? dim.score / dim.max : 0;
-    doc.setFillColor(...PDF_C.border); doc.roundedRect(bx, barY, colW - 4, 5, 1, 1, "F");
-    if (bpct > 0) { doc.setFillColor(...barColors[i % barColors.length]); doc.roundedRect(bx, barY, (colW - 4) * bpct, 5, 1, 1, "F"); }
-    doc.setFont("helvetica", "normal"); doc.setFontSize(6.5); doc.setTextColor(...PDF_C.muted);
-    doc.text(dim.label.split(/\s+/)[0], bx, barY + 10);
-  });
-
-  // Bottom separator
-  doc.setFillColor(...PDF_C.border); doc.rect(rx, 128, rw, 0.5, "F");
-
-  // Date, frameworks, web
-  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...PDF_C.muted);
-  const dStr = new Date().toLocaleDateString(lang === "es" ? "es-PR" : "en-US", { year: "numeric", month: "long", day: "numeric" });
-  doc.text(`${tx.date}: ${dStr}`, rx, 137);
-  doc.text((data.frameworks || []).slice(0, 5).join("  ·  "), rx, 145);
-
-  // ETB web + tagline
-  doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...PDF_C.cyan);
-  doc.text(tx.web, W - 14, 137, { align: "right" });
-  doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(...PDF_C.muted);
-  doc.text(tx.tagline, W - 14, 145, { align: "right" });
-
-  // Bottom cyan rule
-  doc.setFillColor(...PDF_C.cyan); doc.rect(rx, H - 8, rw, 2, "F");
-
-  const safe = (data.toolName || "tool").replace(/[^a-zA-Z0-9]/g, "_");
-  doc.save(`ICRIT_Certificado_${safe}.pdf`);
-}
-
-// ── TRANSLATIONS (condensed — same content as v2.1) ───────────────────────────
-const T = {
-  es: {
-    langToggle: "English",
-    eyebrow: "Instrumento de Evaluación Educativa K-12",
-    heroTitle: "ICRIT", heroFull: "Instrumento para la Integración Crítica de Tecnología",
-    heroSub: "Cualquier herramienta digital · Docentes y líderes educativos · K-12",
-    by: "Desarrollado por",
-    cover: "Inicio", profile: "Perfil", classify: "Herramienta", evaluate: "Evaluación", results: "Resultados",
-    missionLabel: "Misión",
-    missionText: "ICRIT es un instrumento de evaluación crítica diseñado para apoyar a docentes, coordinadores de tecnología y líderes escolares en la toma de decisiones informadas sobre la adopción de herramientas digitales en contextos educativos K-12. Su propósito es ir más allá del entusiasmo tecnológico para preguntarse: ¿esta herramienta realmente apoya el aprendizaje, la equidad y la práctica docente en mi contexto?",
-    howLabel: "¿Cómo usar ICRIT?",
-    how: ["Completa tu perfil como evaluador/a", "Identifica la herramienta y clasifícala según su propósito y nivel de IA", "Responde las preguntas de cada dimensión con honestidad y basándote en tu contexto real", "Revisa tu perfil de resultados y las recomendaciones de implementación", "Descarga el reporte o certificado y compártelo para decisiones institucionales"],
-    frameworksLabel: "Marcos teóricos que fundamentan ICRIT",
-    fwDesc: {
-      "PIC-RAT": "Evalúa el rol del estudiante (Pasivo/Interactivo/Creativo) y el impacto en la práctica docente (Reemplazo/Amplificación/Transformación). Kimmons, Graham & West, 2020.",
-      "Triple E": "Mide si la tecnología logra Engage (compromiso), Enhance (mejora) y Extend (extensión) del aprendizaje. Schrock, 2017.",
-      "TIM": "Technology Integration Matrix — describe los niveles y características de ambientes de aprendizaje con tecnología significativa. FCIT/USF, 2019.",
-      "TPACK": "Technological Pedagogical Content Knowledge — integración del conocimiento tecnológico, pedagógico y de contenido. Mishra & Koehler, 2006.",
-      "FODA": "Análisis de Fortalezas, Oportunidades, Debilidades y Amenazas aplicado al contexto institucional de adopción tecnológica.",
-      "ISTE": "Estándares de la International Society for Technology in Education para estudiantes, docentes y líderes. ISTE, 2024.",
-      "UNESCO AI": "Marco de Competencias en IA para Docentes y Estudiantes — dimensiones éticas, técnicas y pedagógicas. UNESCO, 2024.",
-      "Common Sense": "Framework de privacidad digital y ciudadanía digital para educación K-12. Common Sense Education, 2024.",
-    },
-    citeLabel: "Cómo citar ICRIT (APA 7)",
-    citeText: "EdTech Believers LLC. (2025). ICRIT: Instrumento para la Integración Crítica de Tecnología (Versión 2.0) [Instrumento de evaluación digital]. https://etb.education/icrit",
-    startBtn: "Comenzar evaluación →",
-    nameLabel: "Nombre completo", namePh: "Tu nombre completo",
-    emailLabel: "Correo electrónico", emailPh: "tu@correo.com",
-    roleLabel: "Rol en la institución",
-    roles: ["Docente", "Coordinador/a de Tecnología", "Director/a o Líder Escolar", "Especialista Curricular", "Investigador/a", "Otro"],
-    levelLabel: "Nivel escolar donde trabajas",
-    levels: ["K-2 (Primaria baja)", "3-5 (Primaria alta)", "6-8 (Intermedia)", "9-12 (Superior)", "K-12 (Todos los niveles)", "Administración / Nivel sistema"],
-    privacyNote: "Tu nombre y correo se usan para contextualizar los resultados. Las puntuaciones se guardan de forma anonimizada para mejorar ICRIT.",
-    profileTitle: "Tu perfil como evaluador/a", profileSub: "Esta información permite contextualizar los resultados y contribuir a la base de datos de ICRIT.",
-    nextBtn: "Continuar →", backBtn: "← Atrás",
-    classifyTitle: "¿Qué herramienta vas a evaluar?",
-    toolNameLabel: "Nombre de la herramienta", toolNamePh: "Ej: Notion, MagicSchool AI, Microsoft Teams...",
-    typeLabel: "¿Cuál es el propósito principal de esta herramienta?",
-    types: [
-      { id: "pedagogica", icon: "🎓", label: "Pedagógica / Aprendizaje", desc: "Apoya la instrucción, el aprendizaje activo o la evaluación estudiantil" },
-      { id: "productividad", icon: "⚡", label: "Productividad docente", desc: "Automatiza o simplifica tareas del maestro: planificación, comunicación, administración" },
-      { id: "institucional", icon: "🏫", label: "Gestión institucional", desc: "Apoya la administración escolar, la comunicación institucional o el liderazgo basado en datos" },
-    ],
-    aiLabel: "¿Esta herramienta utiliza inteligencia artificial?",
-    aiNote: "💡 Muchas herramientas ya integran IA aunque no sea su función principal — Canva genera imágenes, Teams tiene Copilot, Quizizz crea preguntas automáticamente. Si la herramienta genera contenido, sugiere respuestas o personaliza automáticamente, selecciona \"IA integrada\".",
-    aiLevels: [
-      { id: "none", icon: "⚙️", label: "Sin IA", desc: "No utiliza inteligencia artificial en ninguna de sus funciones" },
-      { id: "integrated", icon: "✨", label: "IA integrada", desc: "Tiene funciones de IA secundarias: sugerencias, autocompletado, generación básica, análisis automático" },
-      { id: "native", icon: "🤖", label: "IA nativa", desc: "La inteligencia artificial es el núcleo de la herramienta (ej. MagicSchool, Claude, NotebookLM, ChatGPT, Gemini)" },
-    ],
-    moduleSummary: "Tu evaluación incluirá", dimensions: "dimensiones", questions: "preguntas",
-    of: "de", answered: "preguntas respondidas",
-    resultsTitle: "Resultados", totalScore: "Puntuación total", of2: "de", points: "puntos",
-    recommendation: "Recomendación", dimProfile: "Perfil por dimensión", radarLabel: "Perfil visual",
-    actionsLabel: "Recomendaciones de implementación", frameworksUsed: "Marcos aplicados",
-    downloadReport: "Descargar Reporte PDF", downloadCert: "Descargar Certificado PDF",
-    evaluateAnother: "Evaluar otra herramienta",
-    sending: "Guardando resultados...", sent: "✓ Guardado", sendError: "Error al guardar.",
-    weakNote: "Dimensiones prioritarias a fortalecer:",
-    verdicts: {
-      adopt:       { label: "Adoptar ahora",        title: "Herramienta recomendada para adopción inmediata",              body: "Esta herramienta muestra un perfil sólido en todas las dimensiones evaluadas. Es accesible, pedagógicamente alineada y viable en tu contexto. Prioriza su implementación." },
-      plan:        { label: "Adoptar con plan",      title: "Herramienta prometedora — implementa con un plan claro",      body: "La herramienta tiene potencial real pero presenta áreas que requieren atención. Un piloto en una clase o unidad es el mejor primer paso antes de escalar." },
-      conditional: { label: "Evaluar más",           title: "Adopción condicional — hay barreras significativas",          body: "Esta herramienta tiene valor en algunos aspectos pero presenta obstáculos en tu contexto actual. Resuelve las dimensiones más débiles antes de invertir tiempo en aprenderla." },
-      reject:      { label: "No recomendada ahora",  title: "Herramienta no recomendada para este contexto en este momento", body: "Presenta demasiadas barreras para tu contexto actual. Puede que el momento o las condiciones no estén alineados aún. Reconsidera en 6-12 meses." },
-    },
-    actions: {
-      adopt:       ["Implementa esta semana y crea una plantilla o flujo reutilizable desde el inicio", "Comparte la herramienta con al menos un colega esta semana", "Documenta tu experiencia para compartirla en el próximo desarrollo profesional"],
-      plan:        ["Identifica la dimensión más débil y diseña una estrategia concreta para mitigarla", "Pilotea en una sola clase o unidad antes de implementar a escala institucional", "Define un criterio de éxito medible para evaluar después de 3 semanas de uso"],
-      conditional: ["Analiza si las barreras identificadas son temporales o estructurales en tu institución", "Busca una herramienta alternativa que cumpla la misma función con menor fricción", "Si decides continuar, comienza únicamente con la función más básica"],
-      reject:      ["Documenta las razones del rechazo para transparencia institucional futura", "Identifica qué condiciones tendrían que cambiar para reconsiderar su adopción", "Explora herramientas alternativas evaluadas con ICRIT para el mismo propósito"],
-    },
-  },
-  en: {
-    langToggle: "Español",
-    eyebrow: "K-12 Educational Evaluation Instrument",
-    heroTitle: "ICRIT", heroFull: "Instrument for the Critical Integration of Technology",
-    heroSub: "Any digital tool · Teachers and educational leaders · K-12",
-    by: "Developed by",
-    cover: "Home", profile: "Profile", classify: "Tool", evaluate: "Evaluation", results: "Results",
-    missionLabel: "Mission",
-    missionText: "ICRIT is a critical evaluation instrument designed to support teachers, technology coordinators, and school leaders in making informed decisions about the adoption of digital tools in K-12 educational settings. Its purpose goes beyond technological enthusiasm to ask: does this tool genuinely support learning, equity, and teaching practice in my context?",
-    howLabel: "How to use ICRIT",
-    how: ["Complete your evaluator profile", "Identify the tool and classify it by purpose and AI level", "Answer each dimension's questions honestly, based on your real context", "Review your results profile and implementation recommendations", "Download the report or certificate and share it for institutional decisions"],
-    frameworksLabel: "Theoretical frameworks that ground ICRIT",
-    fwDesc: {
-      "PIC-RAT": "Evaluates student role (Passive/Interactive/Creative) and impact on teaching practice (Replacement/Amplification/Transformation). Kimmons, Graham & West, 2020.",
-      "Triple E": "Measures whether technology achieves Engagement, Enhancement, and Extension of learning goals. Schrock, 2017.",
-      "TIM": "Technology Integration Matrix — describes levels and characteristics of meaningful technology-enhanced learning environments. FCIT/USF, 2019.",
-      "TPACK": "Technological Pedagogical Content Knowledge — integration of technological, pedagogical, and content knowledge. Mishra & Koehler, 2006.",
-      "FODA": "SWOT Analysis applied to the institutional context of technology adoption.",
-      "ISTE": "Standards from the International Society for Technology in Education for students, educators, and leaders. ISTE, 2024.",
-      "UNESCO AI": "AI Competency Framework for Teachers and Students — ethical, technical, and pedagogical dimensions. UNESCO, 2024.",
-      "Common Sense": "Digital privacy and digital citizenship framework for K-12 education. Common Sense Education, 2024.",
-    },
-    citeLabel: "How to cite ICRIT (APA 7)",
-    citeText: "EdTech Believers LLC. (2025). ICRIT: Instrument for the Critical Integration of Technology (Version 2.0) [Digital evaluation instrument]. https://etb.education/icrit",
-    startBtn: "Start evaluation →",
-    nameLabel: "Full name", namePh: "Your full name",
-    emailLabel: "Email address", emailPh: "you@email.com",
-    roleLabel: "Role at your institution",
-    roles: ["Teacher", "Technology Coordinator", "Principal or School Leader", "Curriculum Specialist", "Researcher", "Other"],
-    levelLabel: "School level you work with",
-    levels: ["K-2 (Early Elementary)", "3-5 (Upper Elementary)", "6-8 (Middle School)", "9-12 (High School)", "K-12 (All levels)", "Administration / System level"],
-    privacyNote: "Your name and email are used to contextualize results. Score data is stored anonymously to improve ICRIT.",
-    profileTitle: "Your evaluator profile", profileSub: "This information helps contextualize results and contribute to the ICRIT database.",
-    nextBtn: "Continue →", backBtn: "← Back",
-    classifyTitle: "What tool are you evaluating?",
-    toolNameLabel: "Tool name", toolNamePh: "e.g. Notion, MagicSchool AI, Microsoft Teams...",
-    typeLabel: "What is the primary purpose of this tool?",
-    types: [
-      { id: "pedagogica", icon: "🎓", label: "Pedagogical / Learning", desc: "Supports instruction, active learning, or student assessment" },
-      { id: "productividad", icon: "⚡", label: "Teacher productivity", desc: "Automates or simplifies teacher tasks: planning, communication, administration" },
-      { id: "institucional", icon: "🏫", label: "Institutional management", desc: "Supports school administration, institutional communication, or data-driven leadership" },
-    ],
-    aiLabel: "Does this tool use artificial intelligence?",
-    aiNote: "💡 Many popular tools already integrate AI even if it's not their primary feature — Canva generates images, Teams has Copilot, Quizizz auto-generates questions. If the tool generates content, suggests responses, or personalizes automatically, select \"Integrated AI\".",
-    aiLevels: [
-      { id: "none", icon: "⚙️", label: "No AI", desc: "Does not use artificial intelligence in any of its features" },
-      { id: "integrated", icon: "✨", label: "Integrated AI", desc: "Has secondary AI features: suggestions, autocomplete, basic generation, automatic analysis" },
-      { id: "native", icon: "🤖", label: "Native AI", desc: "Artificial intelligence is the core of the tool (e.g. MagicSchool, Claude, NotebookLM, ChatGPT, Gemini)" },
-    ],
-    moduleSummary: "Your evaluation will include", dimensions: "dimensions", questions: "questions",
-    of: "of", answered: "questions answered",
-    resultsTitle: "Results", totalScore: "Total score", of2: "of", points: "points",
-    recommendation: "Recommendation", dimProfile: "Profile by dimension", radarLabel: "Visual profile",
-    actionsLabel: "Implementation recommendations", frameworksUsed: "Applied frameworks",
-    downloadReport: "Download PDF Report", downloadCert: "Download PDF Certificate",
-    evaluateAnother: "Evaluate another tool",
-    sending: "Saving results...", sent: "✓ Saved", sendError: "Error saving.",
-    weakNote: "Priority dimensions to strengthen:",
-    verdicts: {
-      adopt:       { label: "Adopt now",             title: "Tool recommended for immediate adoption",                    body: "This tool shows a strong profile across all evaluated dimensions. It is accessible, pedagogically aligned, and viable in your context. Prioritize its implementation." },
-      plan:        { label: "Adopt with a plan",      title: "Promising tool — implement with a clear plan",              body: "The tool has real potential but presents areas requiring attention. A pilot in one class or unit is the best first step before scaling." },
-      conditional: { label: "Evaluate further",       title: "Conditional adoption — significant barriers present",       body: "This tool has value in some areas but presents real obstacles in your current context. Address the weakest dimensions before investing time in learning it." },
-      reject:      { label: "Not recommended now",    title: "Tool not recommended for this context at this time",        body: "It presents too many barriers for your current context. The moment or conditions may not yet be aligned. Reconsider in 6-12 months." },
-    },
-    actions: {
-      adopt:       ["Implement this week and create a reusable template or workflow from the start", "Share the tool with at least one colleague this week", "Document your experience to share at the next professional development session"],
-      plan:        ["Identify the weakest dimension and design a concrete strategy to address it", "Pilot in a single class or unit before scaling institution-wide", "Define a measurable success criterion to evaluate after 3 weeks of use"],
-      conditional: ["Analyze whether identified barriers are temporary or structural at your institution", "Look for an alternative tool that serves the same purpose with less friction", "If you proceed, start only with the tool's most basic function"],
-      reject:      ["Document rejection reasons for institutional transparency and future reference", "Identify what conditions would need to change to reconsider adoption", "Explore alternative tools evaluated with ICRIT for the same pedagogical purpose"],
-    },
-  },
-};
-
-// ── DIMENSIONS ────────────────────────────────────────────────────────────────
-const getDims = (lang) => {
-  const es = lang === "es";
-  const core = [
-    { id:"acceso", ...DIM_ACCENT.acceso, icon:"🌐", frameworks:["FODA","Common Sense","ISTE"],
-      label: es?"Accesibilidad y equidad":"Accessibility & equity",
-      desc: es?"¿Puede ser adoptada equitativamente en tu institución?":"Can it be adopted equitably at your institution?",
-      questions:[
-        {id:"c1",fw:"FODA", text:es?"La herramienta es gratuita o tiene un costo accesible para mi institución, sin requerir un presupuesto significativo adicional.":"The tool is free or has an accessible cost for my institution, without requiring significant additional budget.", left:es?"Inaccesible":"Inaccessible", right:es?"Completamente accesible":"Fully accessible"},
-        {id:"c2",fw:"ISTE", text:es?"Todos los estudiantes pueden acceder con los dispositivos y conectividad disponibles en la institución, sin excluir a nadie por razones técnicas o económicas.":"All students can access it with available devices and connectivity, without excluding anyone for technical or economic reasons.", left:es?"Excluye a muchos":"Excludes many", right:es?"Acceso universal":"Universal access"},
-        {id:"c3",fw:"Common Sense", text:es?"La herramienta respeta la privacidad del estudiantado: no recopila datos personales de menores sin consentimiento ni los comparte con terceros.":"The tool respects student privacy: it does not collect personal data from minors without consent or share it with third parties.", left:es?"Sin claridad":"No clarity", right:es?"Privacidad protegida":"Privacy protected"},
-      ]},
-    { id:"viabilidad", ...DIM_ACCENT.viabilidad, icon:"⚙️", frameworks:["FODA","ISTE"],
-      label: es?"Viabilidad de implementación":"Implementation viability",
-      desc: es?"¿Puedo implementarla con los recursos y tiempo disponibles?":"Can I implement it with available resources and time?",
-      questions:[
-        {id:"c4",fw:"FODA", text:es?"Puedo aprender a usar esta herramienta de forma funcional en menos de una semana, sin necesitar capacitación técnica especializada.":"I can learn to use this tool functionally in less than one week, without needing specialized technical training.", left:es?"Muy difícil":"Very difficult", right:es?"Muy fácil":"Very easy"},
-        {id:"c5",fw:"FODA", text:es?"El tiempo de configuración e integración es razonable — el beneficio pedagógico o de productividad justifica claramente la inversión inicial.":"The setup and integration time is reasonable — the benefit clearly justifies the initial investment.", left:es?"No justifica":"Not justified", right:es?"Claramente justificado":"Clearly justified"},
-        {id:"c6",fw:"ISTE", text:es?"Existen tutoriales, comunidades de práctica o soporte técnico al que puedo recurrir cuando tenga dudas o encuentre problemas.":"There are tutorials, communities of practice, or technical support I can turn to when I have questions or problems.", left:es?"Sin soporte":"No support", right:es?"Soporte robusto":"Robust support"},
-      ]},
-    { id:"etica", ...DIM_ACCENT.etica, icon:"🛡️", frameworks:["Common Sense","UNESCO AI","ISTE"],
-      label: es?"Ética y responsabilidad digital":"Ethics & digital responsibility",
-      desc: es?"¿Es segura, transparente y responsable para el contexto educativo?":"Is it safe, transparent, and responsible for the educational context?",
-      questions:[
-        {id:"c7",fw:"Common Sense", text:es?"La herramienta cumple con normativas de protección de datos de menores (FERPA, COPPA o equivalentes) y su política de privacidad es clara para un educador.":"The tool complies with minors' data protection regulations (FERPA, COPPA or equivalents) and its privacy policy is clear for an educator.", left:es?"Sin cumplimiento":"No compliance", right:es?"Cumplimiento verificado":"Verified compliance"},
-        {id:"c8",fw:"UNESCO AI", text:es?"La herramienta opera con transparencia: los usuarios comprenden qué hace, cómo lo hace y cuáles son sus limitaciones, sin actuar como una caja negra pedagógica.":"The tool operates transparently: users understand what it does, how it does it, and what its limitations are, without acting as a pedagogical black box.", left:es?"Totalmente opaca":"Completely opaque", right:es?"Totalmente transparente":"Completely transparent"},
-        {id:"c9",fw:"ISTE", text:es?"El uso de esta herramienta promueve la equidad y no reproduce sesgos culturales, lingüísticos o socioeconómicos que puedan afectar negativamente al estudiantado.":"Using this tool promotes equity and does not reproduce cultural, linguistic, or socioeconomic biases that could negatively affect students.", left:es?"Reproduce sesgos":"Reproduces bias", right:es?"Promueve equidad":"Promotes equity"},
-      ]},
-  ];
-  const modules = {
-    pedagogica:[
-      { id:"picrat", ...DIM_ACCENT.picrat, icon:"🔁", frameworks:["PIC-RAT","TIM"],
-        label:es?"Rol del estudiante y transformación":"Student role & transformation",
-        desc:es?"¿Qué hace el estudiante con la tecnología y cómo transforma la práctica?":"What does the student do and how does it transform practice?",
-        questions:[
-          {id:"p1",fw:"PIC-RAT", text:es?"Con esta herramienta, el estudiante va más allá de recibir información pasivamente: interactúa con el contenido o crea productos de aprendizaje nuevos. (PIC: Pasivo → Interactivo → Creativo)":"With this tool, students go beyond passively receiving information: they interact with content or create new learning artifacts. (PIC: Passive → Interactive → Creative)", left:es?"Solo recibe (P)":"Only receives (P)", right:es?"Crea y construye (C)":"Creates & builds (C)"},
-          {id:"p2",fw:"PIC-RAT", text:es?"Esta herramienta transforma la práctica docente: no simplemente reemplaza una actividad existente, sino que amplifica o redefine cómo se enseña y aprende. (RAT: Reemplazo → Amplificación → Transformación)":"This tool transforms teaching practice: it doesn't just replace an existing activity, but amplifies or redefines how teaching and learning happen. (RAT: Replacement → Amplification → Transformation)", left:es?"Solo reemplaza (R)":"Only replaces (R)", right:es?"Transforma (T)":"Transforms (T)"},
-          {id:"p3",fw:"TIM", text:es?"La herramienta favorece ambientes de aprendizaje donde los estudiantes trabajan de forma activa, colaborativa y conectada con situaciones auténticas del mundo real.":"The tool supports learning environments where students work actively, collaboratively, and connected to authentic real-world situations.", left:es?"Aprendizaje pasivo":"Passive learning", right:es?"Activo y auténtico":"Active & authentic"},
-        ]},
-      { id:"triple", ...DIM_ACCENT.triple, icon:"🎯", frameworks:["Triple E","TPACK"],
-        label:es?"Calidad pedagógica":"Pedagogical quality",
-        desc:es?"¿Apoya el aprendizaje genuino y el desarrollo de competencias?":"Does it support genuine learning and competency development?",
-        questions:[
-          {id:"p4",fw:"Triple E", text:es?"La herramienta genera compromiso genuino con los objetivos de aprendizaje: orienta la atención y el esfuerzo del estudiante hacia las metas académicas. (Engage)":"The tool generates genuine engagement with learning objectives: it directs student attention toward academic goals. (Engage)", left:es?"Solo entretiene":"Only entertains", right:es?"Compromiso real":"Real engagement"},
-          {id:"p5",fw:"Triple E", text:es?"La herramienta potencia el aprendizaje: apoya diferenciación, retroalimentación inmediata o permite demostrar comprensión de nuevas formas. (Enhance)":"The tool enhances learning: it supports differentiation, immediate feedback, or allows demonstrating understanding in new ways. (Enhance)", left:es?"No mejora":"Doesn't enhance", right:es?"Potencia significativamente":"Significantly enhances"},
-          {id:"p6",fw:"TPACK", text:es?"Cuento — o puedo desarrollar en tiempo razonable — con el conocimiento tecnológico y pedagógico necesario para integrar esta herramienta efectivamente en mi área de contenido.":"I have — or can develop in reasonable time — the technological and pedagogical knowledge to integrate this tool effectively in my content area.", left:es?"Fuera de mi alcance":"Beyond my reach", right:es?"Puedo integrarlo":"I can integrate it"},
-        ]},
-    ],
-    productividad:[
-      { id:"prod", ...DIM_ACCENT.prod, icon:"⏱️", frameworks:["FODA","ISTE"],
-        label:es?"Impacto en productividad real":"Real productivity impact",
-        desc:es?"¿Me devuelve tiempo para lo que importa: enseñar?":"Does it give me back time for what matters: teaching?",
-        questions:[
-          {id:"pr1",fw:"FODA", text:es?"Esta herramienta automatiza o simplifica tareas que me consumen tiempo sin añadir valor pedagógico directo: corregir, comunicar, planificar o administrar documentación.":"This tool automates or simplifies tasks that consume my time without adding direct pedagogical value: grading, communicating, planning, or managing documentation.", left:es?"No ahorra tiempo":"No time savings", right:es?"Ahorro significativo":"Significant savings"},
-          {id:"pr2",fw:"FODA", text:es?"Esta herramienta se integra sin fricción con las plataformas institucionales existentes, sin obligarme a duplicar trabajo o gestionar sistemas paralelos.":"This tool integrates seamlessly with existing institutional platforms, without forcing me to duplicate work or manage parallel systems.", left:es?"Crea más trabajo":"Creates more work", right:es?"Integración perfecta":"Seamless integration"},
-          {id:"pr3",fw:"ISTE", text:es?"Esta herramienta tiene potencial de escala: puede ser adoptada por más colegas, usada en múltiples contextos y su implementación puede crecer de forma sostenible.":"This tool has scaling potential: it can be adopted by more colleagues, used in multiple contexts, and its implementation can grow sustainably.", left:es?"Solo útil para mí":"Only for me", right:es?"Alto potencial de escala":"High scaling potential"},
-        ]},
-    ],
-    institucional:[
-      { id:"inst", ...DIM_ACCENT.inst, icon:"🏫", frameworks:["ISTE","FODA"],
-        label:es?"Valor institucional y estratégico":"Institutional & strategic value",
-        desc:es?"¿Apoya metas institucionales y genera valor más allá del aula?":"Does it support institutional goals beyond the individual classroom?",
-        questions:[
-          {id:"i1",fw:"ISTE", text:es?"Esta herramienta apoya metas institucionales claras: mejora la comunicación, el seguimiento académico, la eficiencia administrativa o el liderazgo basado en evidencia.":"This tool supports clear institutional goals: it improves communication, academic tracking, administrative efficiency, or evidence-based leadership.", left:es?"Sin valor institucional":"No institutional value", right:es?"Apoya metas claras":"Supports clear goals"},
-          {id:"i2",fw:"FODA", text:es?"La herramienta puede ser adoptada por múltiples docentes o departamentos con un proceso de capacitación razonable, sin depender de un solo experto.":"The tool can be adopted by multiple teachers or departments with a reasonable training process, without depending on a single expert.", left:es?"Dependiente de un experto":"Expert-dependent", right:es?"Adoptable a escala":"Scalable adoption"},
-          {id:"i3",fw:"ISTE", text:es?"La herramienta genera datos o evidencia útil para la toma de decisiones institucionales: reportes, métricas de uso, análisis de efectividad o eficiencia operacional.":"The tool generates data or evidence useful for institutional decision-making: reports, usage metrics, effectiveness analysis, or operational efficiency.", left:es?"Sin datos útiles":"No useful data", right:es?"Datos valiosos":"Valuable data"},
-        ]},
-    ],
-  };
-  const ai = {
-    integrated:{ id:"ai", ...DIM_ACCENT.ai, icon:"✨", frameworks:["UNESCO AI","Common Sense"],
-      label:es?"Evaluación de IA integrada":"Integrated AI evaluation",
-      desc:es?"¿Las funciones de IA son transparentes, seguras y responsables?":"Are the AI features transparent, safe, and responsible?",
-      questions:[
-        {id:"ai1",fw:"UNESCO AI", text:es?"Las funciones de IA de esta herramienta son transparentes: el usuario sabe cuándo interactúa con IA y comprende qué hacen esas funciones específicas.":"This tool's AI features are transparent: the user clearly knows when interacting with AI and understands what those features do.", left:es?"Sin claridad":"No clarity", right:es?"Completamente transparente":"Fully transparent"},
-        {id:"ai2",fw:"Common Sense", text:es?"Los datos procesados por las funciones de IA — incluyendo los del estudiantado — están protegidos y no se usan para entrenar modelos externos sin consentimiento.":"Data processed by AI features — including student data — is protected and not used to train external models without consent.", left:es?"Sin protección":"No protection", right:es?"Datos protegidos":"Data protected"},
-        {id:"ai3",fw:"UNESCO AI", text:es?"Las funciones de IA amplían las capacidades del docente o estudiante en lugar de sustituir su pensamiento — promueven la agencia y el juicio crítico.":"The AI features expand capabilities instead of substituting thinking — they promote agency and critical judgment.", left:es?"Genera dependencia":"Creates dependency", right:es?"Amplía la agencia":"Expands agency"},
-      ]},
-    native:{ id:"ai", ...DIM_ACCENT.ai, icon:"🤖", frameworks:["UNESCO AI","Common Sense","ISTE"],
-      label:es?"Evaluación de IA nativa":"Native AI evaluation",
-      desc:es?"¿Esta IA es pedagógicamente responsable y promueve el pensamiento crítico?":"Is this AI pedagogically responsible and does it promote critical thinking?",
-      questions:[
-        {id:"ai1",fw:"UNESCO AI", text:es?"La herramienta es transparente sobre cómo genera sus respuestas. El docente y el estudiante comprenden sus limitaciones y la necesidad de revisar críticamente cualquier output.":"The tool is transparent about how it generates responses. Teachers and students understand its limitations and the need to critically review any output.", left:es?"Caja negra total":"Complete black box", right:es?"Totalmente transparente":"Fully transparent"},
-        {id:"ai2",fw:"Common Sense", text:es?"La política de privacidad establece claramente que los datos del estudiantado no se venden, no se comparten con terceros y no se usan para reentrenar modelos sin consentimiento.":"The privacy policy clearly states that student data is not sold, shared with third parties, or used to retrain models without consent.", left:es?"Sin protección de datos":"No data protection", right:es?"Privacidad garantizada":"Privacy guaranteed"},
-        {id:"ai3",fw:"UNESCO AI", text:es?"Esta herramienta de IA promueve el pensamiento crítico: no entrega respuestas finales sin promover reflexión, y el docente mantiene el control pedagógico sobre su uso.":"This AI tool promotes critical thinking: it doesn't deliver final answers without encouraging reflection, and teachers maintain pedagogical control over its use.", left:es?"Fomenta dependencia":"Promotes dependency", right:es?"Promueve pensamiento crítico":"Promotes critical thinking"},
-        {id:"ai4",fw:"ISTE", text:es?"El riesgo de dependencia pedagógica es bajo: esta herramienta no sustituye el desarrollo de habilidades fundamentales que el estudiantado debe construir por sí mismo.":"The pedagogical dependency risk is low: this tool does not substitute the development of fundamental skills students must build themselves.", left:es?"Riesgo alto":"High risk", right:es?"Riesgo bajo":"Low risk"},
-        {id:"ai5",fw:"Common Sense", text:es?"Esta IA ha sido evaluada por Common Sense Education, ISTE u otra organización educativa de referencia, o existen evidencias de uso pedagógico responsable en contextos K-12.":"This AI has been evaluated by Common Sense Education, ISTE, or another reference organization, or there is evidence of responsible pedagogical use in K-12 contexts.", left:es?"Sin evaluación externa":"No external evaluation", right:es?"Evaluada y respaldada":"Evaluated & endorsed"},
-        {id:"ai6",fw:"UNESCO AI", text:es?"El contenido que genera esta IA es sensible a la diversidad cultural, lingüística y socioeconómica del estudiantado, sin perpetuar estereotipos ni sesgos sistémicos.":"The content this AI generates is sensitive to students' cultural, linguistic, and socioeconomic diversity, without perpetuating stereotypes or systemic biases.", left:es?"Perpetúa sesgos":"Perpetuates bias", right:es?"Culturalmente responsable":"Culturally responsible"},
-      ]},
-  };
-  return { core, modules, ai };
-};
-
-// ── RADAR CHART ───────────────────────────────────────────────────────────────
-function RadarChart({ labels, data }) {
-  const ref = useRef(null); const chartRef = useRef(null);
   useEffect(() => {
-    if (!ref.current) return;
+    if (!canvasRef.current) return;
     if (chartRef.current) chartRef.current.destroy();
-    chartRef.current = new Chart(ref.current, {
+    chartRef.current = new Chart(canvasRef.current, {
       type: "radar",
-      data: { labels, datasets: [{ data, backgroundColor: C.cyan + "20", borderColor: C.cyan, borderWidth: 2.5, pointBackgroundColor: C.cyan, pointRadius: 4 }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { r: { min: 0, max: 15, ticks: { stepSize: 5, color: C.muted, backdropColor: "transparent", font: { size: 10, family: "'Questrial', sans-serif" } }, grid: { color: "rgba(0,0,0,0.07)" }, angleLines: { color: "rgba(0,0,0,0.07)" }, pointLabels: { color: C.ink, font: { size: 10, family: "'Questrial', sans-serif" }, padding: 8 } } } }
+      data: {
+        labels: ["Accesibilidad\ny contexto", "Transformación\npedagógica", "Alineación\npedagógica", "Viabilidad de\nimplementación", "Potencial\nestratégico"],
+        datasets: [{
+          label,
+          data,
+          backgroundColor: "rgba(55,138,221,0.12)",
+          borderColor: "#378ADD",
+          borderWidth: 2,
+          pointBackgroundColor: DIM_COLORS,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          r: {
+            min: 0, max: 15,
+            ticks: { stepSize: 5, color: "#6b6460", backdropColor: "transparent", font: { size: 11 } },
+            grid: { color: "rgba(0,0,0,0.08)" },
+            angleLines: { color: "rgba(0,0,0,0.08)" },
+            pointLabels: { color: "#3a3530", font: { size: 11 } }
+          }
+        }
+      }
     });
-    return () => chartRef.current?.destroy();
-  }, [labels, data]);
-  return <canvas ref={ref} role="img" aria-label="Radar chart of evaluation dimensions" />;
+    return () => { if (chartRef.current) chartRef.current.destroy(); };
+  }, [data, label]);
+
+  return <canvas ref={canvasRef} role="img" aria-label="Gráfica radar de las 5 dimensiones de evaluación" />;
 }
 
-function ScaleBtn({ qid, val, active, color, onRate }) {
-  return (
-    <button onClick={() => onRate(qid, val)} style={{ flex: 1, padding: "8px 2px", border: `1px solid ${active ? "transparent" : C.border}`, borderRadius: 7, cursor: "pointer", fontSize: 12, fontWeight: 600, background: active ? color : C.card, color: active ? (color === C.cyan ? C.ink : "#fff") : C.muted, transition: "all 0.12s", fontFamily: "'Questrial', sans-serif" }}>
-      {val}
-    </button>
-  );
-}
-
-// ── MAIN ──────────────────────────────────────────────────────────────────────
-export default function ICRIT() {
-  const [lang, setLang] = useState("es");
-  const [step, setStep] = useState("cover");
-  const [evaluator, setEvaluator] = useState({ name: "", email: "", role: "", level: "" });
+export default function App() {
   const [toolName, setToolName] = useState("");
-  const [toolType, setToolType] = useState(null);
-  const [aiLevel, setAiLevel] = useState(null);
   const [scores, setScores] = useState({});
+  const [showResults, setShowResults] = useState(false);
   const [error, setError] = useState("");
-  const [sendState, setSendState] = useState("idle");
-  const [pdfLoaded, setPdfLoaded] = useState(false);
-  const topRef = useRef(null);
-  const t = T[lang];
-  const dims = getDims(lang);
+  const resultsRef = useRef(null);
 
-  useEffect(() => {
-    // Load fonts
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = "https://fonts.googleapis.com/css2?family=Questrial&family=Montserrat:wght@300;400;500;600;700&family=Montserrat+Alternates:wght@700;800&display=swap";
-    document.head.appendChild(link);
-    // Load jsPDF
-    const s = document.createElement("script");
-    s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-    s.onload = () => setPdfLoaded(true);
-    document.head.appendChild(s);
-  }, []);
+  const filled = ALL_QUESTIONS.filter(q => scores[q] > 0).length;
+  const progress = Math.round((filled / 15) * 100);
 
-  const activeDims = (() => {
-    if (!toolType || !aiLevel) return [];
-    const d = [...dims.core];
-    if (dims.modules[toolType]) d.push(...dims.modules[toolType]);
-    if (aiLevel !== "none") d.push(dims.ai[aiLevel]);
-    return d;
-  })();
+  const dimScores = DIMENSIONS.map(d =>
+    d.questions.reduce((s, q) => s + (scores[q.id] || 0), 0)
+  );
+  const total = dimScores.reduce((a, b) => a + b, 0);
+  const verdict = getVerdict(total / 75);
 
-  const allQs = activeDims.flatMap(d => d.questions);
-  const filled = allQs.filter(q => scores[q.id] > 0).length;
-  const progress = allQs.length > 0 ? Math.round((filled / allQs.length) * 100) : 0;
-  const dimScores = activeDims.map(d => d.questions.reduce((s, q) => s + (scores[q.id] || 0), 0));
-  const dimMaxes = activeDims.map(d => d.questions.length * 5);
-  const totalScore = dimScores.reduce((a, b) => a + b, 0);
-  const totalMax = dimMaxes.reduce((a, b) => a + b, 0);
-  const pct = totalMax > 0 ? totalScore / totalMax : 0;
-  const verdictKey = pct >= 0.82 ? "adopt" : pct >= 0.65 ? "plan" : pct >= 0.45 ? "conditional" : "reject";
-  const verdict = t.verdicts[verdictKey];
-  const vTextColor = { adopt: C.adoptText, plan: C.planText, conditional: C.condText, reject: C.rejText }[verdictKey];
-  const vBgColor  = { adopt: C.adoptBg,   plan: C.planBg,   conditional: C.condBg,   reject: C.rejBg   }[verdictKey];
-  const actions = t.actions[verdictKey];
-  const weakDims = activeDims.filter((d, i) => dimScores[i] / dimMaxes[i] < 0.5).map(d => d.label);
-  const allFW = [...new Set(activeDims.flatMap(d => d.frameworks))];
-  const toolTypeLabel = t.types?.find(tp => tp.id === toolType)?.label || "";
-  const aiLevelLabel = t.aiLevels?.find(al => al.id === aiLevel)?.label || "";
-
-  function scrollTop() { setTimeout(() => topRef.current?.scrollIntoView({ behavior: "smooth" }), 80); }
-  function goTo(s) { setStep(s); scrollTop(); }
-  function handleRate(qid, val) { setScores(p => ({ ...p, [qid]: val })); setError(""); }
-
-  function buildPDFData() {
-    return { lang, evaluatorName: evaluator.name, evaluatorEmail: evaluator.email, role: evaluator.role, level: evaluator.level, toolName, toolType, toolTypeLabel, aiLevel, aiLevelLabel, totalScore, totalMax, verdictKey, verdictLabel: verdict.label, verdictBody: verdict.body, dims: activeDims.map((d, i) => ({ label: d.label, score: dimScores[i], max: dimMaxes[i] })), weakDims, actions, frameworks: allFW, citeText: t.citeText };
+  function handleRate(qid, val) {
+    setScores(prev => ({ ...prev, [qid]: val }));
+    setError("");
   }
 
-  async function calcResults() {
-    const missing = allQs.filter(q => !scores[q.id]);
-    if (missing.length > 0) { setError(lang === "es" ? `Faltan ${missing.length} pregunta(s).` : `${missing.length} question(s) remaining.`); return; }
-    setError(""); goTo("results");
-    setSendState("sending");
-    try {
-      const payload = { language: lang, evaluatorName: evaluator.name, evaluatorEmail: evaluator.email, role: evaluator.role, schoolLevel: evaluator.level, toolName, toolType, aiLevel, scores, totalScore, totalMax, percentage: pct, verdict: verdict.label, dimScores: activeDims.map((d, i) => ({ label: d.label, score: dimScores[i], max: dimMaxes[i] })), dimLabels: activeDims.map(d => d.label), frameworks: allFW, recommendations: actions, timestamp: new Date().toISOString() };
-      if (BACKEND_URL && BACKEND_URL !== "YOUR_APPS_SCRIPT_URL_HERE") { await fetch(BACKEND_URL, { method: "POST", body: JSON.stringify(payload) }); setSendState("sent"); } else { setSendState("idle"); }
-    } catch { setSendState("error"); }
+  function getDimScore(dim) {
+    return dim.questions.reduce((s, q) => s + (scores[q.id] || 0), 0);
   }
 
-  function reset() { setStep("cover"); setToolName(""); setToolType(null); setAiLevel(null); setScores({}); setError(""); setSendState("idle"); setEvaluator({ name: "", email: "", role: "", level: "" }); scrollTop(); }
+  function getDimColor(score) {
+    const pct = score / 15;
+    return pct >= 0.7 ? "#1D9E75" : pct >= 0.4 ? "#BA7517" : "#D85A30";
+  }
 
-  const NAV = [t.cover, t.profile, t.classify, t.evaluate, t.results];
-  const IDX = { cover: 0, profile: 1, classify: 2, evaluate: 3, results: 4 };
+  function handleSubmit() {
+    const missing = ALL_QUESTIONS.filter(q => !scores[q]);
+    if (missing.length > 0) {
+      setError(`Faltan ${missing.length} pregunta(s) por responder.`);
+      return;
+    }
+    setShowResults(true);
+    setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+  }
 
-  const F = "'Questrial', 'Montserrat', sans-serif"; // base font
-  const FM = "'Montserrat Alternates', 'Questrial', sans-serif"; // brand display
+  function handleReset() {
+    setScores({});
+    setToolName("");
+    setShowResults(false);
+    setError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
-  const ss = {
-    wrap: { maxWidth: 620, margin: "0 auto", padding: "0 16px 60px", fontFamily: F, color: C.ink, lineHeight: 1.6, fontSize: 14, background: C.paper, minHeight: "100vh" },
-    hero: { background: C.black, borderRadius: "0 0 16px 16px", padding: "0 0 22px", marginBottom: 20, color: "#fff", position: "relative", overflow: "hidden" },
-    cyanBar: { height: 5, background: C.cyan, borderRadius: "0" },
-    heroPad: { padding: "18px 20px 0" },
-    heroAccent: { position: "absolute", top: -20, right: -20, width: 100, height: 100, borderRadius: "50%", background: C.cyan, opacity: 0.08 },
-    heroEye: { fontSize: 9, fontWeight: 400, letterSpacing: "0.2em", textTransform: "uppercase", color: C.cyan, marginBottom: 8, fontFamily: F },
-    heroICRIT: { fontSize: 32, fontWeight: 800, lineHeight: 1, marginBottom: 2, fontFamily: FM, color: C.cyan, letterSpacing: "0.05em" },
-    heroFull: { fontSize: 13, color: "#9ca3af", marginBottom: 6, fontFamily: F },
-    heroSub: { fontSize: 11, color: "#6b7280", fontFamily: F },
-    heroBy: { fontSize: 10, color: "#4b5563", marginTop: 10 },
-    langBtn: { position: "absolute", top: 14, right: 16, padding: "5px 14px", borderRadius: 20, border: `1px solid ${C.cyan}40`, background: "transparent", color: C.cyan, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: F, letterSpacing: "0.08em" },
-    navBar: { display: "flex", marginBottom: 20, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden", background: C.card },
-    navItem: (a) => ({ flex: 1, padding: "9px 4px", textAlign: "center", fontSize: 9, fontWeight: a ? 700 : 400, letterSpacing: "0.06em", textTransform: "uppercase", background: a ? C.black : C.card, color: a ? C.cyan : C.muted, fontFamily: F }),
-    lbl: { fontSize: 10, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8, marginTop: 18, fontFamily: F },
-    inp: { width: "100%", padding: "11px 14px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 14, color: C.ink, background: C.card, outline: "none", boxSizing: "border-box", marginBottom: 2, fontFamily: F },
-    sel: { width: "100%", padding: "11px 14px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 14, color: C.ink, background: C.card, outline: "none", boxSizing: "border-box", marginBottom: 2, fontFamily: F },
-    choice: (a, ac) => ({ border: `1.5px solid ${a ? ac : C.border}`, borderRadius: 10, padding: "12px 14px", cursor: "pointer", marginBottom: 8, background: a ? ac + "12" : C.card, display: "flex", alignItems: "flex-start", gap: 10, transition: "all 0.12s" }),
-    radio: (a, ac) => ({ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${a ? ac : C.border}`, background: a ? ac : "transparent", flexShrink: 0, marginTop: 2 }),
-    primary: { width: "100%", padding: "13px 16px", borderRadius: 9, border: "none", background: C.cyan, color: C.black, fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 12, fontFamily: FM, letterSpacing: "0.03em" },
-    sec: { width: "100%", padding: "11px 16px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.ink, fontSize: 13, fontWeight: 600, cursor: "pointer", marginTop: 8, fontFamily: F },
-    pdfBtnReport: { width: "100%", padding: "12px 16px", borderRadius: 8, border: `1.5px solid ${C.black}`, background: C.black, color: C.cyan, fontSize: 13, fontWeight: 700, cursor: pdfLoaded ? "pointer" : "not-allowed", marginTop: 8, opacity: pdfLoaded ? 1 : 0.5, fontFamily: FM, letterSpacing: "0.03em" },
-    pdfBtnCert: { width: "100%", padding: "12px 16px", borderRadius: 8, border: `1.5px solid ${C.cyan}`, background: C.cyan, color: C.black, fontSize: 13, fontWeight: 700, cursor: pdfLoaded ? "pointer" : "not-allowed", marginTop: 8, opacity: pdfLoaded ? 1 : 0.5, fontFamily: FM, letterSpacing: "0.03em" },
-    err: { fontSize: 12, color: C.rose, textAlign: "center", marginTop: 8, fontFamily: F },
-    note: (bg, bc) => ({ background: bg, border: `1px solid ${bc}`, borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: C.ink, lineHeight: 1.55, fontFamily: F }),
-    metricGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 },
+  const s = {
+    wrap: { maxWidth: 600, margin: "0 auto", padding: "24px 16px 60px", fontFamily: "'DM Sans', system-ui, sans-serif", fontSize: 14, color: "#0f0f0f", lineHeight: 1.6 },
+    title: { fontSize: 20, fontWeight: 700, margin: "0 0 4px", color: "#0f0f0f" },
+    sub: { fontSize: 13, color: "#6b6460", margin: "0 0 10px" },
+    fwRow: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 20 },
+    fwBadge: (bg, c) => ({ fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 20, background: bg, color: c, letterSpacing: "0.05em" }),
+    input: { width: "100%", padding: "10px 14px", border: "1px solid #ddd9d0", borderRadius: 8, fontSize: 14, color: "#0f0f0f", background: "white", outline: "none", marginBottom: 16, boxSizing: "border-box" },
+    progressWrap: { marginBottom: 20 },
+    progressLabel: { display: "flex", justifyContent: "space-between", fontSize: 11, color: "#6b6460", marginBottom: 5 },
+    progressTrack: { height: 4, background: "#ddd9d0", borderRadius: 2, overflow: "hidden" },
+    progressBar: { height: "100%", background: "#378ADD", borderRadius: 2, transition: "width 0.3s", width: progress + "%" },
+    dimCard: { border: "1px solid #ddd9d0", borderRadius: 12, overflow: "hidden", background: "white", marginBottom: 14, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" },
+    dimHeader: { padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid #f0ece4" },
+    dimIcon: (bg) => ({ width: 34, height: 34, borderRadius: 8, background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }),
+    dimLabel: { fontSize: 13, fontWeight: 700, color: "#0f0f0f" },
+    dimMeta: { fontSize: 11, color: "#6b6460", marginTop: 1 },
+    dimScore: (score) => ({ marginLeft: "auto", fontSize: 15, fontWeight: 700, color: score > 0 ? getDimColor(score) : "#6b6460" }),
+    dimBody: { padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14 },
+    qRow: { display: "flex", flexDirection: "column", gap: 6 },
+    qMarco: { fontSize: 10, fontWeight: 700, color: "#6b6460", letterSpacing: "0.08em", textTransform: "uppercase" },
+    qText: { fontSize: 13, color: "#0f0f0f", lineHeight: 1.5 },
+    scaleRow: { display: "flex", gap: 5, alignItems: "center", marginTop: 2 },
+    scaleAnchor: { fontSize: 10, color: "#6b6460", flexShrink: 0 },
+    scaleBtn: (qid, val, dimColor) => ({
+      flex: 1, padding: "7px 2px", border: `1px solid ${scores[qid] === val ? "transparent" : "#ddd9d0"}`,
+      borderRadius: 7, background: scores[qid] === val ? dimColor : "white",
+      color: scores[qid] === val ? "#fff" : "#6b6460",
+      fontSize: 12, fontWeight: 500, cursor: "pointer", textAlign: "center", transition: "all 0.12s"
+    }),
+    submitBtn: { width: "100%", padding: 13, borderRadius: 9, border: "none", background: "#0f0f0f", color: "#f5f2ec", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 16 },
+    error: { color: "#D85A30", fontSize: 12, textAlign: "center", marginTop: 8 },
+    divider: { height: 1, background: "#ddd9d0", margin: "24px 0" },
+    metaGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 },
+    metricCard: { background: "#f8f6f2", borderRadius: 8, padding: "12px 14px", border: "1px solid #ece8e0" },
+    metricLabel: { fontSize: 11, color: "#6b6460", marginBottom: 4, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" },
+    metricVal: { fontSize: 24, fontWeight: 700, color: "#0f0f0f" },
+    metricSub: { fontSize: 11, color: "#6b6460", marginTop: 2 },
+    verdictCard: (bg) => ({ borderRadius: 10, padding: 16, marginBottom: 14, background: bg, border: "1px solid transparent" }),
+    verdictTitle: (c) => ({ fontSize: 14, fontWeight: 700, marginBottom: 6, color: c }),
+    verdictText: { fontSize: 13, lineHeight: 1.6, color: "#3a3530" },
+    barsTitle: { fontSize: 11, fontWeight: 700, color: "#6b6460", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 },
+    legendRow: { display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 12 },
+    legendItem: { display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#6b6460" },
+    legendDot: (c) => ({ width: 10, height: 10, borderRadius: "50%", background: c, flexShrink: 0 }),
     barRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10 },
-    divider: { height: 1, background: C.border, margin: "20px 0" },
-    sectionLbl: { fontSize: 10, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 10, marginTop: 20, fontFamily: F },
+    barDim: { fontSize: 12, color: "#3a3530", width: 120, flexShrink: 0, lineHeight: 1.3 },
+    barTrack: { flex: 1, height: 7, borderRadius: 4, background: "#ece8e0", overflow: "hidden" },
+    barFill: (pct, c) => ({ height: "100%", borderRadius: 4, background: c, width: pct + "%", transition: "width 0.5s" }),
+    barNum: { fontSize: 12, color: "#6b6460", width: 36, textAlign: "right", fontWeight: 600 },
+    radarWrap: { position: "relative", width: "100%", height: 280 },
+    actionBtn: { width: "100%", padding: "11px 16px", borderRadius: 8, border: "1px solid #ddd9d0", background: "white", color: "#0f0f0f", fontSize: 13, fontWeight: 600, cursor: "pointer", marginTop: 8 },
+    sectionTitle: { fontSize: 11, fontWeight: 700, color: "#6b6460", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 },
   };
 
   return (
-    <div style={ss.wrap} ref={topRef}>
-      {/* HERO */}
-      <div style={ss.hero}>
-        <div style={ss.cyanBar} />
-        <div style={ss.heroPad}>
-          <div style={ss.heroAccent} />
-          <button style={ss.langBtn} onClick={() => setLang(l => l === "es" ? "en" : "es")}>{t.langToggle}</button>
-          <div style={ss.heroEye}>{t.eyebrow}</div>
-          <div style={ss.heroICRIT}>{t.heroTitle}</div>
-          <div style={ss.heroFull}>{t.heroFull}</div>
-          <div style={ss.heroSub}>{t.heroSub}</div>
-          <div style={ss.heroBy}>{t.by} <strong style={{ color: "#e5e7eb" }}>EdTech Believers LLC</strong> · <span style={{ color: C.cyan }}>etb.education</span></div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 14 }}>
-            {Object.keys(FW_COLORS).map(fw => <Badge key={fw} fw={fw} />)}
-          </div>
-        </div>
-      </div>
-
-      {/* NAV */}
-      <div style={ss.navBar}>
-        {NAV.map((n, i) => (
-          <div key={n} style={{ ...ss.navItem(IDX[step] === i), borderRight: i < 4 ? `1px solid ${C.border}` : "none" }}>{n}</div>
+    <div style={s.wrap}>
+      <p style={s.title}>Evaluador de herramientas digitales</p>
+      <p style={s.sub}>Productividad docente · Escuela Pública PR · Taller de 6 horas</p>
+      <div style={s.fwRow}>
+        {[["SAMR","#E6F1FB","#185FA5"],["TPACK","#EAF3DE","#3B6D11"],["FODA","#FAEEDA","#854F0B"],["ISTE","#EEEDFE","#3C3489"],["Triple E","#FAECE7","#993C1D"]].map(([name,bg,c]) => (
+          <span key={name} style={s.fwBadge(bg,c)}>{name}</span>
         ))}
       </div>
 
-      {/* COVER */}
-      {step === "cover" && (
-        <>
-          <div style={ss.lbl}>{t.missionLabel}</div>
-          <p style={{ fontSize: 13.5, color: "#3a3530", lineHeight: 1.75, marginBottom: 16, fontFamily: F }}>{t.missionText}</p>
+      <input
+        style={s.input}
+        type="text"
+        placeholder="Nombre de la herramienta (ej. Notion, MagicSchool, Miro...)"
+        value={toolName}
+        onChange={e => setToolName(e.target.value)}
+      />
 
-          <div style={ss.lbl}>{t.howLabel}</div>
-          <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden", background: C.card, marginBottom: 16 }}>
-            {t.how.map((h, i) => (
-              <div key={i} style={{ display: "flex", gap: 12, padding: "11px 14px", borderBottom: i < 4 ? `1px solid ${C.border}` : "none", alignItems: "flex-start" }}>
-                <div style={{ width: 24, height: 24, borderRadius: "50%", background: C.black, color: C.cyan, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1, fontFamily: FM }}>{i + 1}</div>
-                <span style={{ fontSize: 13, color: C.ink, lineHeight: 1.5, fontFamily: F }}>{h}</span>
+      <div style={s.progressWrap}>
+        <div style={s.progressLabel}>
+          <span>{filled} de 15 preguntas respondidas</span>
+          <span>{progress}%</span>
+        </div>
+        <div style={s.progressTrack}>
+          <div style={s.progressBar} />
+        </div>
+      </div>
+
+      {DIMENSIONS.map((dim, di) => {
+        const ds = getDimScore(dim);
+        return (
+          <div key={dim.id} style={s.dimCard}>
+            <div style={s.dimHeader}>
+              <div style={s.dimIcon(dim.color)}>{dim.emoji}</div>
+              <div>
+                <div style={s.dimLabel}>Dimensión {dim.id} — {dim.label}</div>
+                <div style={s.dimMeta}>{dim.meta}</div>
               </div>
-            ))}
-          </div>
-
-          <div style={ss.lbl}>{t.frameworksLabel}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-            {Object.keys(FW_COLORS).map(fw => (
-              <div key={fw} style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", background: C.card, display: "flex", gap: 10, alignItems: "flex-start" }}>
-                <Badge fw={fw} />
-                <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.55, flex: 1, fontFamily: F }}>{t.fwDesc[fw]}</span>
+              <div style={s.dimScore(ds)}>
+                {ds > 0 ? `${ds}/15` : "—"}
               </div>
-            ))}
-          </div>
-
-          <div style={ss.lbl}>{t.citeLabel}</div>
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "12px 14px", marginBottom: 16, borderLeft: `3px solid ${C.cyan}` }}>
-            <p style={{ fontSize: 12, color: C.ink, fontStyle: "italic", lineHeight: 1.6, margin: 0, fontFamily: F }}>{t.citeText}</p>
-          </div>
-
-          <button style={ss.primary} onClick={() => goTo("profile")}>{t.startBtn}</button>
-        </>
-      )}
-
-      {/* PROFILE */}
-      {step === "profile" && (
-        <>
-          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4, fontFamily: FM }}>{t.profileTitle}</div>
-          <p style={{ fontSize: 12, color: C.muted, marginBottom: 16, fontFamily: F }}>{t.profileSub}</p>
-          <div style={ss.lbl}>{t.nameLabel}</div>
-          <input style={ss.inp} type="text" placeholder={t.namePh} value={evaluator.name} onChange={e => setEvaluator(p => ({ ...p, name: e.target.value }))} />
-          <div style={ss.lbl}>{t.emailLabel}</div>
-          <input style={ss.inp} type="email" placeholder={t.emailPh} value={evaluator.email} onChange={e => setEvaluator(p => ({ ...p, email: e.target.value }))} />
-          <div style={ss.lbl}>{t.roleLabel}</div>
-          <select style={ss.sel} value={evaluator.role} onChange={e => setEvaluator(p => ({ ...p, role: e.target.value }))}>
-            <option value="">—</option>{t.roles.map(r => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <div style={ss.lbl}>{t.levelLabel}</div>
-          <select style={ss.sel} value={evaluator.level} onChange={e => setEvaluator(p => ({ ...p, level: e.target.value }))}>
-            <option value="">—</option>{t.levels.map(l => <option key={l} value={l}>{l}</option>)}
-          </select>
-          <div style={ss.note("#edf7fc", C.cyan + "40")}>🔒 {t.privacyNote}</div>
-          {error && <div style={ss.err}>{error}</div>}
-          <button style={ss.primary} onClick={() => {
-            if (!evaluator.name || !evaluator.email || !evaluator.role || !evaluator.level) { setError(lang === "es" ? "Completa todos los campos." : "Complete all fields."); return; }
-            setError(""); goTo("classify");
-          }}>{t.nextBtn}</button>
-          <button style={ss.sec} onClick={() => goTo("cover")}>{t.backBtn}</button>
-        </>
-      )}
-
-      {/* CLASSIFY */}
-      {step === "classify" && (
-        <>
-          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, fontFamily: FM }}>{t.classifyTitle}</div>
-          <div style={ss.lbl}>{t.toolNameLabel}</div>
-          <input style={ss.inp} type="text" placeholder={t.toolNamePh} value={toolName} onChange={e => { setToolName(e.target.value); setError(""); }} />
-          <div style={ss.lbl}>{t.typeLabel}</div>
-          {t.types.map(tp => (
-            <div key={tp.id} style={ss.choice(toolType === tp.id, C.cyan)} onClick={() => setToolType(tp.id)}>
-              <span style={{ fontSize: 20, flexShrink: 0, marginTop: 1 }}>{tp.icon}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2, fontFamily: FM }}>{tp.label}</div>
-                <div style={{ fontSize: 12, color: C.muted, fontFamily: F }}>{tp.desc}</div>
-              </div>
-              <div style={ss.radio(toolType === tp.id, C.cyan)} />
             </div>
-          ))}
-          <div style={ss.lbl}>{t.aiLabel}</div>
-          <div style={ss.note("#fffbeb", "#fde68a")}>{t.aiNote}</div>
-          {t.aiLevels.map(al => {
-            const ac = al.id === "none" ? C.teal : al.id === "integrated" ? C.cyan : C.rose;
-            return (
-              <div key={al.id} style={ss.choice(aiLevel === al.id, ac)} onClick={() => setAiLevel(al.id)}>
-                <span style={{ fontSize: 20, flexShrink: 0, marginTop: 1 }}>{al.icon}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2, fontFamily: FM }}>{al.label}</div>
-                  <div style={{ fontSize: 12, color: C.muted, fontFamily: F }}>{al.desc}</div>
-                </div>
-                <div style={ss.radio(aiLevel === al.id, ac)} />
-              </div>
-            );
-          })}
-          {toolType && aiLevel && (
-            <div style={ss.note(C.cyanL, C.cyan + "60")}>
-              <strong>{t.moduleSummary}:</strong> {activeDims.length} {t.dimensions} · {allQs.length} {t.questions}
-            </div>
-          )}
-          {error && <div style={ss.err}>{error}</div>}
-          <button style={ss.primary} onClick={() => {
-            if (!toolType || !aiLevel) { setError(lang === "es" ? "Selecciona el tipo y nivel de IA." : "Select type and AI level."); return; }
-            if (!toolName.trim()) { setError(lang === "es" ? "Escribe el nombre de la herramienta." : "Enter the tool name."); return; }
-            setError(""); goTo("evaluate");
-          }}>{t.nextBtn}</button>
-          <button style={ss.sec} onClick={() => goTo("profile")}>{t.backBtn}</button>
-        </>
-      )}
-
-      {/* EVALUATE */}
-      {step === "evaluate" && (
-        <>
-          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4, fontFamily: FM }}>{toolName}</div>
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, fontFamily: F }}>{toolTypeLabel} · {aiLevelLabel} · {activeDims.length} {t.dimensions}</div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.muted, marginBottom: 5, fontFamily: F }}>
-            <span>{filled} {t.of} {allQs.length} {t.answered}</span>
-            <span style={{ fontWeight: 700, color: C.cyan }}>{progress}%</span>
-          </div>
-          <div style={{ height: 4, background: C.border, borderRadius: 2, overflow: "hidden", marginBottom: 20 }}>
-            <div style={{ height: "100%", background: C.cyan, borderRadius: 2, transition: "width 0.3s", width: progress + "%" }} />
-          </div>
-
-          {activeDims.map(dim => {
-            const ds = dim.questions.reduce((s, q) => s + (scores[q.id] || 0), 0);
-            const dm = dim.questions.length * 5;
-            const hasAny = dim.questions.some(q => scores[q.id]);
-            const dpct = hasAny ? ds / dm : -1;
-            const scoreColor = dpct < 0 ? C.muted : dpct >= 0.7 ? C.adoptText : dpct >= 0.4 ? C.amber : C.rose;
-            return (
-              <div key={dim.id} style={{ border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", background: C.card, marginBottom: 14, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-                <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.border}`, background: dim.light, display: "flex", alignItems: "flex-start", gap: 10 }}>
-                  <span style={{ fontSize: 20, flexShrink: 0, marginTop: 2 }}>{dim.icon}</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2, fontFamily: FM }}>{dim.label}</div>
-                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, fontFamily: F }}>{dim.desc}</div>
-                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{dim.frameworks.map(fw => <Badge key={fw} fw={fw} />)}</div>
+            <div style={s.dimBody}>
+              {dim.questions.map(q => (
+                <div key={q.id} style={s.qRow}>
+                  <div style={s.qMarco}>{q.marco}</div>
+                  <div style={s.qText}>{q.text}</div>
+                  <div style={s.scaleRow}>
+                    <span style={s.scaleAnchor}>{q.left}</span>
+                    {[1,2,3,4,5].map(val => (
+                      <button key={val} style={s.scaleBtn(q.id, val, DIM_COLORS[di])} onClick={() => handleRate(q.id, val)}>{val}</button>
+                    ))}
+                    <span style={s.scaleAnchor}>{q.right}</span>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: scoreColor, flexShrink: 0, fontFamily: FM }}>{hasAny ? `${ds}/${dm}` : "—"}</div>
                 </div>
-                <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
-                  {dim.questions.map((q, qi) => (
-                    <div key={q.id} style={{ paddingBottom: qi < dim.questions.length - 1 ? 14 : 0, borderBottom: qi < dim.questions.length - 1 ? `1px solid #f0ece4` : "none" }}>
-                      <div style={{ marginBottom: 6 }}><Badge fw={q.fw} /></div>
-                      <div style={{ fontSize: 13.5, color: C.ink, lineHeight: 1.6, marginBottom: 9, fontFamily: F }}>{q.text}</div>
-                      <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-                        <span style={{ fontSize: 10, color: C.muted, flexShrink: 0, width: 58, lineHeight: 1.3, fontFamily: F }}>{q.left}</span>
-                        {[1, 2, 3, 4, 5].map(v => <ScaleBtn key={v} qid={q.id} val={v} active={scores[q.id] === v} color={dim.color} onRate={handleRate} />)}
-                        <span style={{ fontSize: 10, color: C.muted, flexShrink: 0, width: 58, textAlign: "right", lineHeight: 1.3, fontFamily: F }}>{q.right}</span>
-                      </div>
-                    </div>
-                  ))}
+              ))}
+            </div>
+          </div>
+        );
+      })}
+
+      <button style={s.submitBtn} onClick={handleSubmit}>Ver mi evaluación completa →</button>
+      {error && <div style={s.error}>{error}</div>}
+
+      {showResults && (
+        <div ref={resultsRef}>
+          <div style={s.divider} />
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#0f0f0f", marginBottom: 16 }}>
+            Resultados — {toolName || "Herramienta evaluada"}
+          </div>
+
+          <div style={s.metaGrid}>
+            <div style={s.metricCard}>
+              <div style={s.metricLabel}>Puntuación total</div>
+              <div style={s.metricVal}>{total}</div>
+              <div style={s.metricSub}>de 75 puntos posibles</div>
+            </div>
+            <div style={s.metricCard}>
+              <div style={s.metricLabel}>Recomendación</div>
+              <div style={{ fontSize: 26 }}>{verdict.icon}</div>
+              <div style={s.metricSub}>{verdict.short}</div>
+            </div>
+          </div>
+
+          <div style={s.verdictCard(verdict.bg)}>
+            <div style={s.verdictTitle(verdict.titleColor)}>{verdict.title}</div>
+            <div style={s.verdictText}>{verdict.text}</div>
+          </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <div style={s.barsTitle}>Perfil por dimensión</div>
+            <div style={s.legendRow}>
+              {DIM_NAMES.map((n,i) => (
+                <span key={n} style={s.legendItem}>
+                  <span style={s.legendDot(DIM_COLORS[i])} />{n}
+                </span>
+              ))}
+            </div>
+            {DIMENSIONS.map((dim, i) => {
+              const ds = dimScores[i];
+              const pct = Math.round((ds / 15) * 100);
+              return (
+                <div key={dim.id} style={s.barRow}>
+                  <div style={s.barDim}>{dim.label.split(" y ")[0].split(" de ")[0]}<br />{dim.label.includes("y") ? "y " + dim.label.split(" y ")[1] : dim.label.includes("de ") ? "de " + dim.label.split("de ")[1] : ""}</div>
+                  <div style={s.barTrack}>
+                    <div style={s.barFill(pct, DIM_COLORS[i])} />
+                  </div>
+                  <div style={s.barNum}>{ds}/15</div>
                 </div>
-              </div>
-            );
-          })}
-
-          {error && <div style={ss.err}>{error}</div>}
-          <button style={ss.primary} onClick={calcResults}>{lang === "es" ? "Ver resultados →" : "View results →"}</button>
-          <button style={ss.sec} onClick={() => goTo("classify")}>{t.backBtn}</button>
-        </>
-      )}
-
-      {/* RESULTS */}
-      {step === "results" && (
-        <>
-          <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4, fontFamily: FM }}>{t.resultsTitle} — {toolName}</div>
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, fontFamily: F }}>{toolTypeLabel} · {aiLevelLabel} · {activeDims.length} {t.dimensions}</div>
-
-          {sendState === "sending" && <div style={{ fontSize: 12, color: C.muted, textAlign: "center", marginBottom: 8, fontFamily: F }}>{t.sending}</div>}
-          {sendState === "sent"    && <div style={{ fontSize: 12, color: C.adoptText, textAlign: "center", marginBottom: 8, fontFamily: F }}>{t.sent}</div>}
-          {sendState === "error"   && <div style={{ fontSize: 12, color: C.rose, textAlign: "center", marginBottom: 8, fontFamily: F }}>{t.sendError}</div>}
-
-          <div style={ss.metricGrid}>
-            <div style={{ background: C.card, borderRadius: 8, padding: "12px 14px", border: `1px solid ${C.border}`, borderTop: `3px solid ${C.cyan}` }}>
-              <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4, fontFamily: F }}>{t.totalScore}</div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: C.ink, fontFamily: FM }}>{totalScore}</div>
-              <div style={{ fontSize: 11, color: C.muted, fontFamily: F }}>{t.of2} {totalMax} {t.points} · {Math.round(pct * 100)}%</div>
-            </div>
-            <div style={{ background: C.card, borderRadius: 8, padding: "12px 14px", border: `1px solid ${C.border}`, borderTop: `3px solid ${vTextColor}` }}>
-              <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4, fontFamily: F }}>{t.recommendation}</div>
-              <div style={{ fontSize: 24 }}>{pct >= 0.82 ? "✅" : pct >= 0.65 ? "⚡" : pct >= 0.45 ? "⚠️" : "⛔"}</div>
-              <div style={{ fontSize: 11, color: vTextColor, fontWeight: 700, fontFamily: FM }}>{verdict.label}</div>
-            </div>
+              );
+            })}
           </div>
 
-          <div style={{ borderRadius: 12, padding: 16, marginBottom: 16, background: vBgColor, borderLeft: `4px solid ${vTextColor}` }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: vTextColor, marginBottom: 6, fontFamily: FM }}>{verdict.title}</div>
-            <div style={{ fontSize: 13, color: "#3a3530", lineHeight: 1.65, fontFamily: F }}>{verdict.body}</div>
+          <div style={s.sectionTitle}>Radar — perfil visual</div>
+          <div style={s.radarWrap}>
+            <RadarChart data={dimScores} label={toolName || "Herramienta"} />
           </div>
 
-          <div style={ss.sectionLbl}>{t.dimProfile}</div>
-          {activeDims.map((dim, i) => (
-            <div key={dim.id} style={ss.barRow}>
-              <div style={{ fontSize: 11, color: C.ink, width: 112, flexShrink: 0, lineHeight: 1.3, fontFamily: F }}>{dim.icon} {dim.label.split(/\s+/).slice(0, 3).join(" ")}</div>
-              <div style={{ flex: 1, height: 7, borderRadius: 4, background: C.border, overflow: "hidden" }}>
-                <div style={{ height: "100%", borderRadius: 4, background: dim.color, width: Math.round((dimScores[i] / dimMaxes[i]) * 100) + "%", transition: "width 0.5s" }} />
-              </div>
-              <div style={{ fontSize: 12, color: C.muted, width: 40, textAlign: "right", fontWeight: 600, fontFamily: FM }}>{dimScores[i]}/{dimMaxes[i]}</div>
-            </div>
-          ))}
-
-          <div style={ss.sectionLbl}>{t.radarLabel}</div>
-          <div style={{ position: "relative", width: "100%", height: 280, marginBottom: 20, background: C.card, borderRadius: 12, border: `1px solid ${C.border}`, padding: 10 }}>
-            <RadarChart labels={activeDims.map(d => d.label.split(" ").slice(0, 2).join(" "))} data={dimScores} />
+          <div style={{ marginTop: 20 }}>
+            <button style={s.actionBtn} onClick={handleReset}>Evaluar otra herramienta</button>
           </div>
-
-          <div style={ss.sectionLbl}>{t.actionsLabel}</div>
-          <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden", background: C.card, marginBottom: 16 }}>
-            {actions.map((a, i) => (
-              <div key={i} style={{ display: "flex", gap: 10, padding: "11px 14px", borderBottom: i < actions.length - 1 ? `1px solid ${C.border}` : "none", alignItems: "flex-start" }}>
-                <span style={{ color: C.cyan, fontWeight: 700, fontSize: 14, flexShrink: 0, marginTop: 1 }}>→</span>
-                <span style={{ fontSize: 13, color: C.ink, lineHeight: 1.5, fontFamily: F }}>{a}</span>
-              </div>
-            ))}
-            {weakDims.length > 0 && (
-              <div style={{ display: "flex", gap: 10, padding: "11px 14px", alignItems: "flex-start", background: "#fef2f2" }}>
-                <span style={{ color: C.rose, fontWeight: 700, fontSize: 14, flexShrink: 0, marginTop: 1 }}>⚠</span>
-                <span style={{ fontSize: 13, color: C.ink, lineHeight: 1.5, fontFamily: F }}>{t.weakNote} <strong>{weakDims.join(", ")}</strong></span>
-              </div>
-            )}
-          </div>
-
-          <div style={ss.sectionLbl}>{t.frameworksUsed}</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>{allFW.map(fw => <Badge key={fw} fw={fw} />)}</div>
-
-          <div style={ss.sectionLbl}>{t.citeLabel}</div>
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "12px 14px", marginBottom: 20, borderLeft: `3px solid ${C.cyan}` }}>
-            <p style={{ fontSize: 12, color: C.ink, fontStyle: "italic", lineHeight: 1.6, margin: 0, fontFamily: F }}>{t.citeText}</p>
-          </div>
-
-          <div style={ss.divider} />
-          <button style={ss.pdfBtnReport} onClick={() => generateReportPDF(buildPDFData(), lang)}>📄 {t.downloadReport}</button>
-          <button style={ss.pdfBtnCert} onClick={() => generateCertificatePDF(buildPDFData(), lang)}>🏅 {t.downloadCert}</button>
-          <button style={{ ...ss.sec, marginTop: 12 }} onClick={reset}>{t.evaluateAnother}</button>
-        </>
+        </div>
       )}
     </div>
   );
